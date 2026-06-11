@@ -1,0 +1,24 @@
+{
+  "name": "tp-checkout-widget",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "shopify app dev",
+    "server": "node server.js",
+    "dev:all": "concurrently \"npm run server\" \"npm run dev\"",
+    "worker:dev": "npx wrangler dev --remote --config cf-worker/wrangler.toml",
+    "worker:deploy": "npx wrangler deploy --config cf-worker/wrangler.toml",
+    "deploy": "shopify app deploy",
+    "config:link": "shopify app config link"
+  },
+  "dependencies": {
+    "@shopify/app": "latest",
+    "@shopify/cli": "latest",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
