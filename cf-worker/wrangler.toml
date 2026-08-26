@@ -1,0 +1,9 @@
+name = "tp-checkout-proxy"
+main = "src/index.js"
+compatibility_date = "2026-05-07"
+
+[observability.logs]
+enabled = true
+
+# Set TRUSTPILOT_API_KEY with:
+# wrangler secret put TRUSTPILOT_API_KEY

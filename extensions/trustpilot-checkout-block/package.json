@@ -1,0 +1,13 @@
+{
+  "name": "trustpilot-checkout-block",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "@shopify/ui-extensions": "2025.7.4",
+    "@shopify/ui-extensions-react": "2025.7.4",
+    "react": "^18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0"
+  }
+}

@@ -1,0 +1,19 @@
+# Free-tier Node proxy (replaces Fly). https://render.com/docs/free
+# 1. Push repo, connect in Render dashboard, use this Blueprint or create a Web Service from this repo.
+# 2. Set env TRUSTPILOT_API_KEY in Render (Environment).
+# 3. After first deploy, note the URL (e.g. https://tp-checkout-proxy.onrender.com) and set the same
+#    host in: shopify.app.toml [app_proxy] url, shopify.app.tp-demo-clean.toml, Checkout.jsx PROXY_BASE_URL.
+# 4. shopify app deploy (so app proxy + extension pick up the new host).
+# Free services spin down when idle; first request after sleep can take ~1 minute.
+
+services:
+  - type: web
+    name: tp-checkout-proxy
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUSTPILOT_API_KEY
+        sync: false

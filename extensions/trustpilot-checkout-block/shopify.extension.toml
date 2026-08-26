@@ -1,0 +1,59 @@
+api_version = "2025-07"
+
+[[extensions]]
+name = "Trustpilot Reviews"
+handle = "trustpilot-checkout-block"
+uid = "f8a5698f-ec5f-c961-4d6c-7547674af9ceac9acebd"
+type = "ui_extension"
+
+[[extensions.targeting]]
+module = "./src/Checkout.jsx"
+target = "purchase.checkout.block.render"
+
+[extensions.capabilities]
+network_access = true
+api_access = true
+block_progress = false
+customer_privacy = true
+
+[extensions.settings]
+[[extensions.settings.fields]]
+key = "trustpilot_buid"
+type = "single_line_text_field"
+name = "Trustpilot Business Unit ID"
+
+[[extensions.settings.fields]]
+key = "trustpilot_domain"
+type = "single_line_text_field"
+name = "Trustpilot Domain"
+description = "Business slug for profile links (e.g. example.com). Used if the API does not return a name. Not shown as text in the widget."
+
+[[extensions.settings.fields]]
+key = "widget_display_mode"
+type = "single_line_text_field"
+name = "Widget layout"
+description = "Review summary: rating header only. Review list: vertical list of reviews. Review carousel: one review at a time with prev/next."
+[[extensions.settings.fields.validations]]
+name = "choices"
+value = "[\"summary\", \"list\", \"carousel\"]"
+
+[[extensions.settings.fields]]
+key = "widget_review_count"
+type = "number_integer"
+name = "Reviews to show (review list & review carousel)"
+description = "Choose how many reviews to display (2–10). Only used for review list and review carousel. Ignored for review summary."
+[[extensions.settings.fields.validations]]
+name = "min"
+value = "2"
+[[extensions.settings.fields.validations]]
+name = "max"
+value = "10"
+
+[[extensions.settings.fields]]
+key = "widget_review_filter"
+type = "single_line_text_field"
+name = "Which reviews to show (review list & review carousel)"
+description = "Only used for review list and review carousel. Review summary does not load review text."
+[[extensions.settings.fields.validations]]
+name = "choices"
+value = "[\"five_only\", \"four_and_five\", \"latest\"]"

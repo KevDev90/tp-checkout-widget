@@ -1,0 +1,34 @@
+# Environment & secrets (never commit)
+.env
+.env.local
+.env.*.local
+!.env.example
+cf-worker/.dev.vars
+.dev.vars
+*.pem
+*.key
+
+# Cloudflare / local tunnel (machine-specific)
+.wrangler/
+cloudflared-config.yml
+
+# Dependencies
+node_modules/
+
+# Test coverage
+coverage/
+
+# macOS
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Extension build output
+extensions/*/build/
+extensions/*/dist/
+
+# Shopify CLI local state
+.shopify/
+.shopify.lock
