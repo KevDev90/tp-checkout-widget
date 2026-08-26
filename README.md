@@ -1,116 +1,212 @@
-# Shopify App Template - Extension only
+# Trustpilot Checkout Widget
 
-This is a template for building an [extension-only Shopify app](https://shopify.dev/docs/apps/build/app-extensions/build-extension-only-app). It contains the basics for building a Shopify app that uses only app extensions.
+Shopify checkout UI extension that shows Trustpilot ratings and reviews on the **checkout** page. Merchants can choose a summary, list, or carousel layout. Trustpilot API calls run on a backend proxy so the API key never reaches the browser.
 
-This template doesn't include a server or the ability to embed a page in the Shopify Admin. If you want either of these capabilities, choose the [Remix app template](https://github.com/Shopify/shopify-app-template-remix) instead.
+## High-level overview
 
-Whether you choose to use this template or another one, you can use your preferred package manager and the Shopify CLI with [these steps](#installing-the-template).
-
-## Benefits
-
-Shopify apps are built on a variety of Shopify tools to create a great merchant experience. The [create an app](https://shopify.dev/docs/apps/getting-started/create) tutorial in our developer documentation will guide you through creating a Shopify app.
-
-This app template does little more than install the CLI and scaffold a repository.
-
-## Getting started
-
-### Requirements
-
-1. You must [download and install Node.js](https://nodejs.org/en/download/) if you don't already have it.
-1. You must [create a Shopify partner account](https://partners.shopify.com/signup) if you don’t have one.
-1. You must create a store for testing if you don't have one, either a [development store](https://help.shopify.com/en/partners/dashboard/development-stores#create-a-development-store) or a [Shopify Plus sandbox store](https://help.shopify.com/en/partners/dashboard/managing-stores/plus-sandbox-store).
-
-### Installing the template
-
-This template can be installed using your preferred package manager:
-
-Using yarn:
-
-```shell
-yarn create @shopify/app
+```
+Buyer checkout
+    │
+    ▼
+Shopify Checkout UI Extension  (extensions/trustpilot-checkout-block)
+    │  fetch JSON + load brand assets
+    ▼
+Cloudflare Worker proxy  (cf-worker/)  ← TRUSTPILOT_API_KEY lives here
+    │  cached GETs (~15 min)
+    ▼
+Trustpilot Public API  (business unit + reviews)
 ```
 
-Using npm:
+| Piece | Role |
+|--------|------|
+| **Checkout extension** | React UI on `purchase.checkout.block.render`. Reads merchant settings (BUID, domain, layout, filters). Caches review JSON in checkout session storage. |
+| **Cloudflare Worker** | Server-side proxy: holds the API key, calls Trustpilot, caches responses, serves brandmark / star-strip images. |
+| **Shopify app proxy** | Shop URLs like `/apps/tp-proxy/img/tp/...` forward to the worker so checkout `Image` can load assets reliably. |
+| **Express (`server.js`)** | Optional local / alternate proxy (same routes). Production path is the Worker. |
 
-```shell
-npm init @shopify/app@latest
+**What merchants configure in the checkout editor**
+
+- Trustpilot Business Unit ID (BUID)
+- Trustpilot domain (for profile links)
+- Layout: review summary / review list / review carousel
+- Reviews to show: 2–10 (list & carousel)
+- Which reviews: 5-star only, 4 & 5 star, or latest
+
+## Prerequisites
+
+1. [Node.js](https://nodejs.org/) (18+ recommended)
+2. [Shopify Partner account](https://partners.shopify.com/signup) and a development or Plus sandbox store
+3. [Shopify CLI](https://shopify.dev/docs/api/shopify-cli) (installed via this repo’s dependencies)
+4. [Cloudflare account](https://dash.cloudflare.com/) + [Wrangler](https://developers.cloudflare.com/workers/wrangler/) (`npx wrangler` works)
+5. Trustpilot API access (Enterprise, or Premium + API Module) and a **Business Unit ID**
+6. A Trustpilot API key (never commit it)
+
+### Finding your BUID
+
+```text
+GET https://api.trustpilot.com/v1/business-units/find?apikey=YOUR_KEY&name=yourdomain.com
 ```
 
-Using pnpm:
+Use the `id` field from the response as **Trustpilot Business Unit ID** in the extension settings.
 
-```shell
-pnpm create @shopify/app@latest
+## Project structure
+
+```text
+tp-checkout-widget/
+├── extensions/trustpilot-checkout-block/   # Checkout UI extension
+│   └── src/Checkout.jsx
+├── cf-worker/                              # Cloudflare Worker proxy (recommended)
+│   ├── src/index.js
+│   └── wrangler.toml
+├── server.js                               # Optional Express proxy
+├── shopify.app*.toml                       # Shopify app + app proxy config
+├── .env.example                            # Template for local Express only
+└── package.json
 ```
 
-This will clone the template and install the required dependencies.
+## Setup
 
-#### Local Development
+### 1. Clone and install
 
-[The Shopify CLI](https://shopify.dev/docs/apps/tools/cli) connects to an app in your Partners dashboard. It provides environment variables and runs commands in parallel.
-
-You can develop locally using your preferred package manager. Run one of the following commands from the root of your app.
-
-Using yarn:
-
-```shell
-yarn dev
+```bash
+git clone https://github.com/KevDev90/tp-checkout-widget.git
+cd tp-checkout-widget
+npm install
 ```
 
-Using npm:
+### 2. Link the Shopify app
 
-```shell
+```bash
+npx shopify auth login
+npx shopify app config link
+```
+
+This repo includes multiple app configs (`shopify.app.toml`, `shopify.app.tp-demo-clean.toml`, `shopify.app.tp-checkout-clean.toml`). Pick the one that matches the Partner app you want to use:
+
+```bash
+npx shopify app config use
+```
+
+### 3. Deploy the Cloudflare Worker proxy
+
+```bash
+npx wrangler login
+npx wrangler secret put TRUSTPILOT_API_KEY --config cf-worker/wrangler.toml
+# paste your Trustpilot API key when prompted
+
+npm run worker:deploy
+```
+
+Note the Worker URL, e.g. `https://tp-checkout-proxy.<your-subdomain>.workers.dev`.
+
+### 4. Point the app and extension at your Worker
+
+1. Set `[app_proxy].url` in your active `shopify.app*.toml` to the Worker URL:
+
+```toml
+[app_proxy]
+url = "https://tp-checkout-proxy.YOUR_SUBDOMAIN.workers.dev"
+subpath = "tp-proxy"
+prefix = "apps"
+```
+
+2. Set the same host in the extension as `PROXY_BASE_URL` in:
+
+`extensions/trustpilot-checkout-block/src/Checkout.jsx`
+
+API calls go to the Worker; images prefer the shop app-proxy path and fall back to the Worker.
+
+### 5. Local development
+
+```bash
 npm run dev
 ```
 
-Using pnpm:
+This runs `shopify app dev`, links a preview URL, and lets you install/update the app on a development store.
 
-```shell
-pnpm run dev
-```
-
-Open the URL generated in your console. Once you grant permission to the app, you can start development (such as generating extensions).
-
-## Developer resources
-
-- [Introduction to Shopify apps](https://shopify.dev/docs/apps/getting-started)
-- [App extensions](https://shopify.dev/docs/apps/build/app-extensions)
-- [Extension only apps](https://shopify.dev/docs/apps/build/app-extensions/build-extension-only-app)
-- [Shopify CLI](https://shopify.dev/docs/apps/tools/cli)
-
-## Cloudflare Worker proxy (no Fly, no credit card)
-
-This repo includes a Worker implementation of the Trustpilot proxy in `cf-worker/src/index.js`.
-
-Routes:
-- `/health`
-- `/api/proxy?buid=...`
-- `/img/tp/brandmark`
-- `/img/tp/r5`, `/img/tp/r4half`, etc.
-
-### Local/remote dev
+Optional Worker-only remote preview:
 
 ```bash
 npm run worker:dev
 ```
 
-This starts `wrangler dev --remote` and prints a Cloudflare URL you can use temporarily.
-
-### Deploy
+Optional Express proxy (local only):
 
 ```bash
-wrangler login
-wrangler secret put TRUSTPILOT_API_KEY --config cf-worker/wrangler.toml
-npm run worker:deploy
+cp .env.example .env
+# put TRUSTPILOT_API_KEY in .env
+npm run server
 ```
 
-After deploy, copy the Worker URL (`https://<name>.<subdomain>.workers.dev`) and set it as:
-- `[app_proxy].url` in `shopify.app.toml`
-- `[app_proxy].url` in `shopify.app.tp-demo-clean.toml`
+Do **not** commit `.env`.
 
-Then run:
+### 6. Add the block in checkout
 
-```bash
-shopify app deploy
+1. Open the store’s **Checkout editor** (Shopify Admin → Settings → Checkout → Customize).
+2. Add the **Trustpilot Reviews** app block.
+3. Fill in BUID, domain, layout, and review options.
+4. Save and place an order (or use checkout preview) to verify.
+
+## Deploy / update production
+
+| What changed | Command |
+|--------------|---------|
+| Checkout extension or app config | `npm run deploy` (`shopify app deploy`) |
+| Proxy API / image routes | `npm run worker:deploy` |
+| Both | Worker first, then `shopify app deploy` |
+
+After deploy, hard-refresh checkout (or use a private window) so you’re not on a cached extension bundle.
+
+Sanity-check app proxy images on the store:
+
+```text
+https://YOUR-STORE.myshopify.com/apps/tp-proxy/img/tp/brandmark
 ```
 
-The checkout extension now uses app-proxy URLs for API and strip/brandmark images, so backend host swaps do not require extension code edits.
+That should return a PNG (not HTML). If it 404s, the app isn’t installed or app proxy isn’t configured for that store.
+
+## Merchant settings reference
+
+| Setting | Values | Notes |
+|---------|--------|--------|
+| Trustpilot Business Unit ID | string | Required |
+| Trustpilot Domain | e.g. `example.com` | Profile link fallback |
+| Widget layout | `summary` / `list` / `carousel` | Summary = rating header only |
+| Reviews to show | 2–10 | List & carousel only |
+| Which reviews to show | `five_only` / `four_and_five` / `latest` | List & carousel; UI discloses the filter |
+
+## Security notes
+
+- **API key** stays on the Worker (`wrangler secret`) or in local `.env` for Express. Never put it in the extension.
+- **BUID** is a public Trustpilot identifier. It appears in network requests to your proxy; that is expected and low risk without the API key.
+- Domain is used for public profile links on a store the buyer is already visiting.
+- Use `.env.example` / `cf-worker/.dev.vars.example` as templates only. Real secrets stay gitignored.
+
+## Caching behavior
+
+| Layer | Behavior |
+|--------|----------|
+| Worker JSON | Cloudflare cache, ~15 minutes (`max-age=900`) |
+| Extension | Shopify `useStorage()` so revisiting checkout steps doesn’t re-hit the Worker every time |
+| Images | Edge / proxy caching for brandmark and star strips |
+
+## Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `npm run dev` | Shopify app + extension local preview |
+| `npm run deploy` | Publish extension / app config to Shopify |
+| `npm run worker:dev` | Wrangler remote Worker preview |
+| `npm run worker:deploy` | Deploy Worker to Cloudflare |
+| `npm run server` | Run optional Express proxy |
+| `npm run config:link` | Link CLI to a Partner app |
+
+## Requirements / scope
+
+- Built for **Shopify checkout** (`purchase.checkout.block.render`), not the thank-you page.
+- Trustpilot custom API / TrustBox guidelines: server-side calls, caching, and disclosing filtered reviews are supported by this architecture.
+- Requires a Shopify store that can use **checkout UI extensions** (typically Shopify Plus / eligible plans for checkout extensibility).
+
+## License
+
+Private / use as allowed by your organization unless a `LICENSE` file is added to this repository.
